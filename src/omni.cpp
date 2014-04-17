@@ -260,10 +260,13 @@ int main(int argc, char** argv) {
 	////////////////////////////////////////////////////////////////
 	HDErrorInfo error;
 	HHD hHD;
-	hHD = hdInitDevice(HD_DEFAULT_DEVICE);
+	//hHD = hdInitDevice(HD_DEFAULT_DEVICE);
+	hHD = hdInitDevice("Default PHANToM");
+
 	if (HD_DEVICE_ERROR(error = hdGetError())) {
 		//hduPrintError(stderr, &error, "Failed to initialize haptic device");
-		ROS_ERROR("Failed to initialize haptic device"); //: %s", &error);
+		//ROS_ERROR("Failed to initialize haptic device"); //: %s", &error);
+		//ROS_ERROR("PROBLEM"); //: %s", &error);
 		return -1;
 	}
 
