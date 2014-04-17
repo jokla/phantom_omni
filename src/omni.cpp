@@ -22,6 +22,7 @@ int calibrationStyle;
 
 struct OmniState {
 	hduVector3Dd position;  //3x1 vector of position
+
 	hduVector3Dd velocity;  //3x1 vector of velocity
 	hduVector3Dd inp_vel1; //3x1 history of velocity used for filtering velocity estimate
 	hduVector3Dd inp_vel2;
@@ -31,6 +32,21 @@ struct OmniState {
 	hduVector3Dd out_vel3;
 	hduVector3Dd pos_hist1; //3x1 history of position used for 2nd order backward difference estimate of velocity
 	hduVector3Dd pos_hist2;
+
+
+	hduVector3Dd ang_velocity;  //3x1 vector of velocity
+	hduVector3Dd ang_inp_vel1; //3x1 history of velocity used for filtering velocity estimate
+	hduVector3Dd ang_inp_vel2;
+	hduVector3Dd ang_inp_vel3;
+	hduVector3Dd ang_out_vel1;
+	hduVector3Dd ang_out_vel2;
+	hduVector3Dd ang_out_vel3;
+	hduVector3Dd ang_pos_hist1; //3x1 history of position used for 2nd order backward difference estimate of velocity
+	hduVector3Dd ang_pos_hist2;
+
+
+
+
 	hduVector3Dd rot;
 	hduVector3Dd joints;
 	hduVector3Dd force;   //3 element double vector force[0], force[1], force[2]
@@ -101,6 +117,20 @@ public:
 		state->pos_hist2 = zeros; //3x1 history of position
 
 
+//ANGULAR
+		state->ang_velocity = zeros;
+		state->ang_inp_vel1 = zeros;  //3x1 history of velocity
+		state->ang_inp_vel2 = zeros;  //3x1 history of velocity
+		state->ang_inp_vel3 = zeros;  //3x1 history of velocity
+		state->ang_out_vel1 = zeros;  //3x1 history of velocity
+		state->ang_out_vel2 = zeros;  //3x1 history of velocity
+		state->ang_out_vel3 = zeros;  //3x1 history of velocity
+		state->ang_pos_hist1 = zeros; //3x1 history of position
+		state->ang_pos_hist2 = zeros; //3x1 history of position
+
+
+
+
 		state->lock = false;
 		state->lock_pos = zeros;
 
@@ -165,13 +195,9 @@ public:
 		twist_msg.twist.linear.x = 0.05 * (double) state->velocity[0];
 		twist_msg.twist.linear.y = 0.05 * (double) state->velocity[1];
 		twist_msg.twist.linear.z = 0.05 * (double) state->velocity[2];
-		twist_msg.twist.angular.x = (double) state->thetas[4];
-		twist_msg.twist.angular.y = (double) state->thetas[5];
-		twist_msg.twist.angular.z = (double) state->thetas[6];
-
-		twist_msg.twist.angular.x =  0;
-		twist_msg.twist.angular.y = 0;
-		twist_msg.twist.angular.z = 0;
+		twist_msg.twist.angular.x = 0.2 * (double) state->ang_velocity[0];
+		twist_msg.twist.angular.y = 0.2 * (double) state->ang_velocity[1];
+		twist_msg.twist.angular.z = 0.2 *(double) state->ang_velocity[2];
 
 		twist_msg.header.stamp = now;
 
@@ -219,6 +245,31 @@ HDCallbackCode HDCALLBACK omni_state_callback(void *pUserData) {
 
 
 
+	hduVector3Dd ang_vel_buff(0, 0, 0);
+
+	ang_vel_buff = (omni_state->rot * 3 - 4 * omni_state->ang_pos_hist1
+			+ omni_state->ang_pos_hist2) / 0.002;  //mm/s, 2nd order backward dif
+	omni_state->ang_velocity = (.2196 * (ang_vel_buff + omni_state->ang_inp_vel3)
+			+ .6588 * (omni_state->ang_inp_vel1 + omni_state->ang_inp_vel2)) / 1000.0
+			- (-2.7488 * omni_state->ang_out_vel1 + 2.5282 * omni_state->ang_out_vel2
+					- 0.7776 * omni_state->ang_out_vel3);  //cutoff freq of 20 Hz
+	omni_state->ang_pos_hist2 = omni_state->ang_pos_hist1;
+	omni_state->ang_pos_hist1 = omni_state->rot;
+	omni_state->ang_inp_vel3 = omni_state->ang_inp_vel2;
+	omni_state->ang_inp_vel2 = omni_state->ang_inp_vel1;
+	omni_state->ang_inp_vel1 = ang_vel_buff;
+	omni_state->ang_out_vel3 = omni_state->ang_out_vel2;
+	omni_state->ang_out_vel2 = omni_state->ang_out_vel1;
+	omni_state->ang_out_vel1 = omni_state->ang_velocity;
+
+
+
+
+
+
+
+
+
 	if (omni_state->lock == true) {
 		omni_state->force = 0.09 * (omni_state->lock_pos - omni_state->position)
 				- 0.006 * omni_state->velocity;
@@ -235,6 +286,7 @@ HDCallbackCode HDCALLBACK omni_state_callback(void *pUserData) {
 	hdEndFrame(hdGetCurrentDevice());
 
 	//std::cout << omni_state->velocity[0] << std::endl;
+
 	//std::cout <<omni_state->velocity[1] << std::endl;
 	//std::cout <<omni_state->velocity[2] << std::endl;
 
