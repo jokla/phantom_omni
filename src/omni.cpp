@@ -1,5 +1,6 @@
 #include <ros/ros.h>
 #include <sensor_msgs/JointState.h>
+#include <geometry_msgs/TwistStamped.h>
 
 #include <string.h>
 #include <stdio.h>
@@ -34,6 +35,8 @@ struct OmniState {
 	hduVector3Dd joints;
 	hduVector3Dd force;   //3 element double vector force[0], force[1], force[2]
 	float thetas[7];
+	//hduVector3Dd lin_vel;
+	//hduVector3Dd ang_vel;
 	int buttons[2];
 	int buttons_prev[2];
 	bool lock;
@@ -45,8 +48,8 @@ class PhantomROS {
 public:
 	ros::NodeHandle n;
 	ros::Publisher joint_pub;
-
 	ros::Publisher button_pub;
+	ros::Publisher twist_pub;
 	ros::Subscriber haptic_sub;
 	std::string omni_name;
 
@@ -67,6 +70,13 @@ public:
 		button_topic << omni_name << "_button";
 		button_pub = n.advertise<phantom_omni::PhantomButtonEvent>(button_topic.str(), 100);
 
+
+		// Publish Twist
+		std::ostringstream twist_topic;
+		twist_topic << omni_name << "_twist";
+		//twist_pub = n.advertise<geometry_msgs::TwistStamped>(twist_topic.str(), 100);
+		twist_pub = n.advertise<geometry_msgs::TwistStamped>("/vrep/Disc/SetTwist", 100);
+
 		// Subscribe to NAME_force_feedback.
 		std::ostringstream force_feedback_topic;
 		force_feedback_topic << omni_name << "_force_feedback";
@@ -79,6 +89,7 @@ public:
 		state->buttons_prev[0] = 0;
 		state->buttons_prev[1] = 0;
 		hduVector3Dd zeros(0, 0, 0);
+
 		state->velocity = zeros;
 		state->inp_vel1 = zeros;  //3x1 history of velocity
 		state->inp_vel2 = zeros;  //3x1 history of velocity
@@ -88,6 +99,8 @@ public:
 		state->out_vel3 = zeros;  //3x1 history of velocity
 		state->pos_hist1 = zeros; //3x1 history of position
 		state->pos_hist2 = zeros; //3x1 history of position
+
+
 		state->lock = false;
 		state->lock_pos = zeros;
 
@@ -111,8 +124,11 @@ public:
 	}
 
 	void publish_omni_state() {
+
+	    ros::Time now = ros::Time::now();
+
 		sensor_msgs::JointState joint_state;
-		joint_state.header.stamp = ros::Time::now();
+		joint_state.header.stamp = now;
 		joint_state.name.resize(6);
 		joint_state.position.resize(6);
 		joint_state.name[0] = "waist";
@@ -143,6 +159,28 @@ public:
 			state->buttons_prev[1] = state->buttons[1];
 			button_pub.publish(button_event);
 		}
+
+		geometry_msgs::TwistStamped twist_msg;
+
+		twist_msg.twist.linear.x = 0.05 * (double) state->velocity[0];
+		twist_msg.twist.linear.y = 0.05 * (double) state->velocity[1];
+		twist_msg.twist.linear.z = 0.05 * (double) state->velocity[2];
+		twist_msg.twist.angular.x = (double) state->thetas[4];
+		twist_msg.twist.angular.y = (double) state->thetas[5];
+		twist_msg.twist.angular.z = (double) state->thetas[6];
+
+		twist_msg.twist.angular.x =  0;
+		twist_msg.twist.angular.y = 0;
+		twist_msg.twist.angular.z = 0;
+
+		twist_msg.header.stamp = now;
+
+		twist_pub.publish(twist_msg);
+
+
+
+
+
 	}
 };
 
@@ -157,6 +195,11 @@ HDCallbackCode HDCALLBACK omni_state_callback(void *pUserData) {
 	hdGetDoublev(HD_CURRENT_GIMBAL_ANGLES, omni_state->rot);
 	hdGetDoublev(HD_CURRENT_POSITION, omni_state->position);
 	hdGetDoublev(HD_CURRENT_JOINT_ANGLES, omni_state->joints);
+	//hdGetDoublev(HD_CURRENT_VELOCITY, omni_state->lin_vel);
+	//hdGetDoublev(HD_CURRENT_ANGULAR_VELOCITY, omni_state->ang_vel);
+
+
+
 
 	hduVector3Dd vel_buff(0, 0, 0);
 	vel_buff = (omni_state->position * 3 - 4 * omni_state->pos_hist1
@@ -173,9 +216,12 @@ HDCallbackCode HDCALLBACK omni_state_callback(void *pUserData) {
 	omni_state->out_vel3 = omni_state->out_vel2;
 	omni_state->out_vel2 = omni_state->out_vel1;
 	omni_state->out_vel1 = omni_state->velocity;
+
+
+
 	if (omni_state->lock == true) {
-		omni_state->force = 0.04 * (omni_state->lock_pos - omni_state->position)
-				- 0.001 * omni_state->velocity;
+		omni_state->force = 0.09 * (omni_state->lock_pos - omni_state->position)
+				- 0.006 * omni_state->velocity;
 	}
 
 	hdSetDoublev(HD_CURRENT_FORCE, omni_state->force);
@@ -187,6 +233,10 @@ HDCallbackCode HDCALLBACK omni_state_callback(void *pUserData) {
 	omni_state->buttons[1] = (nButtons & HD_DEVICE_BUTTON_2) ? 1 : 0;
 
 	hdEndFrame(hdGetCurrentDevice());
+
+	//std::cout << omni_state->velocity[0] << std::endl;
+	//std::cout <<omni_state->velocity[1] << std::endl;
+	//std::cout <<omni_state->velocity[2] << std::endl;
 
 	HDErrorInfo error;
 	if (HD_DEVICE_ERROR(error = hdGetError())) {
@@ -259,12 +309,13 @@ int main(int argc, char** argv) {
 	// Init Phantom
 	////////////////////////////////////////////////////////////////
 	HDErrorInfo error;
-	HHD hHD;
+	//HHD hHD;
+
 	//hHD = hdInitDevice(HD_DEFAULT_DEVICE);
-	hHD = hdInitDevice("Default PHANToM");
+	HHD hHD = hdInitDevice("Default PHANToM");
 
 	if (HD_DEVICE_ERROR(error = hdGetError())) {
-		//hduPrintError(stderr, &error, "Failed to initialize haptic device");
+		hduPrintError(stderr, &error, "Failed to initialize haptic device");
 		//ROS_ERROR("Failed to initialize haptic device"); //: %s", &error);
 		//ROS_ERROR("PROBLEM"); //: %s", &error);
 		return -1;
