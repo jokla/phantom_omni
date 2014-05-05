@@ -192,12 +192,57 @@ public:
 
 		geometry_msgs::TwistStamped twist_msg;
 
-		twist_msg.twist.linear.x = 0.05 * (double) state->velocity[0];
-		twist_msg.twist.linear.y = 0.05 * (double) state->velocity[1];
-		twist_msg.twist.linear.z = 0.05 * (double) state->velocity[2];
-		twist_msg.twist.angular.x = 0.2 * (double) state->ang_velocity[0];
-		twist_msg.twist.angular.y = 0.2 * (double) state->ang_velocity[1];
-		twist_msg.twist.angular.z = 0.2 *(double) state->ang_velocity[2];
+		double x,y,z,x_a,y_a,z_a;
+
+		x = state->position[0];
+		y = state->position[1];
+		z = state->position[2];
+
+		x_a = state->rot[0];
+		y_a = state->rot[1];
+		z_a = state->rot[2];
+
+
+
+
+        if ( x < -5 )
+        	twist_msg.twist.linear.x = -0.2;
+         else if (x > 5.5)
+        	twist_msg.twist.linear.x = 0.2;
+        if ( y < -14 )
+            twist_msg.twist.linear.y = -0.2;
+         else if (y > -1)
+        	twist_msg.twist.linear.y = 0.2;
+        if ( z < -8 )
+            twist_msg.twist.linear.z = -0.2;
+         else if (z > 8)
+        	twist_msg.twist.linear.z = 0.2;
+
+
+        if ( x_a < -3.5 )
+        	twist_msg.twist.angular.x = -0.1;
+         else if (x_a > -2.5)
+        	twist_msg.twist.angular.x = 0.1;
+        if ( y_a < -3.3 )
+            twist_msg.twist.angular.y = +0.1;
+         else if (y_a > -2.5)
+        	twist_msg.twist.angular.y = -0.1;
+        if ( z_a < -4 )
+            twist_msg.twist.angular.z = -0.1;
+         else if (z_a > -2)
+        	twist_msg.twist.angular.z = 0.1;
+
+
+
+
+
+
+		//twist_msg.twist.linear.x = 0.05 * (double) state->velocity[0];
+		//twist_msg.twist.linear.y = 0.05 * (double) state->velocity[1];
+		//twist_msg.twist.linear.z = 0.05 * (double) state->velocity[2];
+		//twist_msg.twist.angular.x = 0.2 * (double) state->ang_velocity[0];
+		//twist_msg.twist.angular.y = 0.2 * (double) state->ang_velocity[1];
+		//twist_msg.twist.angular.z = 0.2 * (double) state->ang_velocity[2];
 
 		twist_msg.header.stamp = now;
 
@@ -264,15 +309,13 @@ HDCallbackCode HDCALLBACK omni_state_callback(void *pUserData) {
 
 
 
-
-
-
-
-
-
 	if (omni_state->lock == true) {
 		omni_state->force = 0.09 * (omni_state->lock_pos - omni_state->position)
 				- 0.006 * omni_state->velocity;
+		//omni_state->force = 0.5 * (omni_state->lock_pos - omni_state->position)
+		//		- 0.009 * omni_state->velocity;
+
+
 	}
 
 	hdSetDoublev(HD_CURRENT_FORCE, omni_state->force);
@@ -285,10 +328,20 @@ HDCallbackCode HDCALLBACK omni_state_callback(void *pUserData) {
 
 	hdEndFrame(hdGetCurrentDevice());
 
-	//std::cout << omni_state->velocity[0] << std::endl;
+	//std::cout << "X: " << omni_state->lock_pos[0] - omni_state->position[0] << std::endl;
+	//std::cout << "Y: " <<  omni_state->lock_pos[1] - omni_state->position[1] << std::endl;
+	//std::cout << "Z: " <<  omni_state->lock_pos[2] - omni_state->position[2] << std::endl;
 
-	//std::cout <<omni_state->velocity[1] << std::endl;
-	//std::cout <<omni_state->velocity[2] << std::endl;
+
+	//std::cout << "X: " << omni_state->force[0] << std::endl;
+	//std::cout << "Y: " <<  omni_state->force[1] << std::endl;
+	//std::cout << "Z: " <<  omni_state->force[2] << std::endl;
+
+///	std::cout << "X: " << omni_state->position[0] << std::endl;
+
+//	std::cout << "Y: " <<  omni_state->position[1] << std::endl;
+//	std::cout <<"Z: " <<  omni_state->position[2] << std::endl;
+//	std::cout <<"--------------------------" << std::endl;
 
 	HDErrorInfo error;
 	if (HD_DEVICE_ERROR(error = hdGetError())) {
@@ -302,6 +355,14 @@ HDCallbackCode HDCALLBACK omni_state_callback(void *pUserData) {
 			omni_state->rot[1], omni_state->rot[2] };
 	for (int i = 0; i < 7; i++)
 		omni_state->thetas[i] = t[i];
+
+
+	//std::cout << "X: " << omni_state->rot[0] << std::endl;
+	//std::cout << "Y: " <<  omni_state->rot[1] << std::endl;
+	//std::cout << "Z: " <<  omni_state->rot[2] << std::endl;
+
+
+
 	return HD_CALLBACK_CONTINUE;
 }
 
@@ -344,7 +405,7 @@ void HHD_Auto_Calibration() {
 void *ros_publish(void *ptr) {
 	PhantomROS *omni_ros = (PhantomROS *) ptr;
 	int publish_rate;
-	omni_ros->n.param(std::string("publish_rate"), publish_rate, 100);
+	omni_ros->n.param(std::string("publish_rate"), publish_rate, 1000);
 	ros::Rate loop_rate(publish_rate);
 	ros::AsyncSpinner spinner(2);
 	spinner.start();
